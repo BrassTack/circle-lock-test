@@ -45,12 +45,39 @@ make_jq_prog() {
     jq_prog=".[] | select(.build_num < $CIRCLE_BUILD_NUM and (.status | test(\"running|pending|queued\")) $jq_filters) | .build_num"
 }
 
+curl_builds() {
+  curl -s -H "Accept: application/json" "$api_url"
+}
+
 
 if [[ "$0" != *bats* ]]; then
 set -e
 set -u
 set -o pipefail
 
+    ## when circleci build is run via CLI, CIRCLE_BUILD_NUM is set but empty.
+    ## check this first
+    if [[ "x${CIRCLE_BUILD_NUM}" != "x" ]]
+     then
+      echo "Skipping $(basename $0), this appears to be a CLI build, CIRCLE_BUILD_NUM is empty"
+      exit 0
+    fi
+
+    ## lets do some validation checks.
+    ##
+    min_jqversion="jq-1.5"
+    jqversion=$(jq --version)
+    ## simple test, probably should be better.  this just compares after the last .
+    if ! [[ ${jqversion/*./} -ge ${min_jqversion/*./} ]]
+     then
+      echo "ERROR: requires jq version [ ${min_jqversion} ] or newer, you have [ ${jqversion} ]"
+      exit 1
+    fi
+    if [[ "x${CIRCLE_TOKEN}" == "x" ]]
+     then
+      echo "ERROR: CIRCLE_TOKEN is unset"
+      exit 1
+    fi
     branch=""
     tag=""
     rest=()
@@ -63,8 +90,17 @@ set -o pipefail
 
     echo "Checking for running builds..."
 
+    # we need to test for validity of the token somewhere.
+    # cheese:~%% curl -s -H 'Accept: application/json' 'https://circleci.com/api/v1/project/.../...?circle-token=...&limit=100'
+    # {"message":"Permission denied"}
+    if curl_builds | grep -eq "Permission denied"
+     then
+      echo "ERROR: attempting to use your CIRCLE_TOKEN results in permission denied error"
+      exit
+    fi
+
     while true; do
-        builds=$(curl -s -H "Accept: application/json" "$api_url" | jq "$jq_prog")
+        builds=$(curl_builds | jq "$jq_prog")
         if [[ $builds ]]; then
             echo "Waiting on builds:"
             echo "$builds"
