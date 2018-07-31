@@ -55,12 +55,20 @@ set -e
 set -u
 set -o pipefail
 
+    branch=""
+    tag=""
+    rest=()
+    parse_args "$@"
+
     ## when circleci build is run via CLI, CIRCLE_BUILD_NUM is set but empty.
     ## check this first
     if [[ "x${CIRCLE_BUILD_NUM}" == "x" ]]
      then
       echo "Skipping $(basename $0), this appears to be a CLI build, CIRCLE_BUILD_NUM is empty"
-      exit 0
+      if [[ "${#rest[@]}" -ne 0 ]]; then
+          "${rest[@]}"
+      fi
+      exit $?
     fi
 
     ## lets do some validation checks.
@@ -80,12 +88,11 @@ set -o pipefail
       exit 1
     fi
 
-    branch=""
-    tag=""
-    rest=()
+
+
     api_url="https://circleci.com/api/v1/project/$CIRCLE_PROJECT_USERNAME/$CIRCLE_PROJECT_REPONAME?circle-token=$CIRCLE_TOKEN&limit=100"
 
-    parse_args "$@"
+
     commit_message=$(git log -1 --pretty=%B)
     if should_skip; then exit 0; fi
     make_jq_prog

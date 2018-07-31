@@ -123,6 +123,9 @@ teardown() {
 @test "circleci cli" {
   CIRCLE_BUILD_NUM="" run ./do-exclusively
     expected=$'Skipping do-exclusively, this appears to be a CLI build, CIRCLE_BUILD_NUM is empty'
+    # echo -e "output:\n$output" > test.out
+    # echo -e "expected:\n$expected" >> test.out
+    # echo -e "test data:\n$test_data" >> test.out
     [[ "$output" == "$expected" ]]
 }
 
