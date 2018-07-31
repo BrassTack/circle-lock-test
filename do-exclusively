@@ -57,7 +57,7 @@ set -o pipefail
 
     ## when circleci build is run via CLI, CIRCLE_BUILD_NUM is set but empty.
     ## check this first
-    if [[ "x${CIRCLE_BUILD_NUM}" != "x" ]]
+    if [[ "x${CIRCLE_BUILD_NUM}" == "x" ]]
      then
       echo "Skipping $(basename $0), this appears to be a CLI build, CIRCLE_BUILD_NUM is empty"
       exit 0
@@ -68,16 +68,18 @@ set -o pipefail
     min_jqversion="jq-1.5"
     jqversion=$(jq --version)
     ## simple test, probably should be better.  this just compares after the last .
-    if ! [[ ${jqversion/*./} -ge ${min_jqversion/*./} ]]
+    if [[ ${jqversion/*./} -lt ${min_jqversion/*./} ]]
      then
       echo "ERROR: requires jq version [ ${min_jqversion} ] or newer, you have [ ${jqversion} ]"
       exit 1
     fi
-    if [[ "x${CIRCLE_TOKEN}" == "x" ]]
+
+    if [[ "x${CIRCLE_TOKEN:=}" == "x" ]]
      then
-      echo "ERROR: CIRCLE_TOKEN is unset"
+      echo "ERROR: CIRCLE_TOKEN is unset or empty"
       exit 1
     fi
+
     branch=""
     tag=""
     rest=()
@@ -93,10 +95,10 @@ set -o pipefail
     # we need to test for validity of the token somewhere.
     # cheese:~%% curl -s -H 'Accept: application/json' 'https://circleci.com/api/v1/project/.../...?circle-token=...&limit=100'
     # {"message":"Permission denied"}
-    if curl_builds | grep -eq "Permission denied"
+    if curl_builds | grep -q "Permission denied"
      then
       echo "ERROR: attempting to use your CIRCLE_TOKEN results in permission denied error"
-      exit
+      exit 1
     fi
 
     while true; do

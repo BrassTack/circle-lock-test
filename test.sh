@@ -12,12 +12,17 @@ test_data='[{ "build_num": 1, "status": "running", "branch": "foo", "subject": "
             { "build_num": 6, "status": "pending", "branch": "foo", "subject": "Has [bar] tag"}]'
 
 curl() {
-    if [[ -e curl_data/1 ]]; then
-        cat curl_data/1
-        rm curl_data/1
-    else
-        cat curl_data/2
-    fi
+    # each time our test-curl gets called, grab the next file, then delete it.
+    data=$(ls -1 curl_data/* | sort | head -n1)
+    cat $data
+    rm $data
+
+    # if [[ -e curl_data/1 ]]; then
+    #     cat curl_data/1
+    #     rm curl_data/1
+    # else
+    #     cat curl_data/2
+    # fi
 }
 
 git() {
@@ -115,14 +120,79 @@ teardown() {
 }
 
 
+@test "circleci cli" {
+  CIRCLE_BUILD_NUM="" run ./do-exclusively
+    expected=$'Skipping do-exclusively, this appears to be a CLI build, CIRCLE_BUILD_NUM is empty'
+    [[ "$output" == "$expected" ]]
+}
+
+@test "empty token" {
+  CIRCLE_BUILD_NUM=6 CIRCLE_TOKEN="" run ./do-exclusively
+    expected=$'ERROR: CIRCLE_TOKEN is unset or empty'
+    [[ "$output" == "$expected" ]]
+}
+
+@test "unset token" {
+  CIRCLE_BUILD_NUM=6 run ./do-exclusively
+    expected=$'ERROR: CIRCLE_TOKEN is unset or empty'
+    [[ "$output" == "$expected" ]]
+}
+
+
+@test "check permission denied" {
+    mkdir curl_data
+    # permission denied check curl call
+    echo '[{"message":"Permission denied"}]' > curl_data/1
+    git_data="Tagged with [bar]"
+    export curl_response_1 git_data
+    CIRCLE_PROJECT_USERNAME=foo CIRCLE_PROJECT_REPONAME=bar CIRCLE_BUILD_NUM=6 \
+                           CIRCLE_TOKEN=abc run ./do-exclusively --tag bar echo foo
+    expected=$'Checking for running builds...\nERROR: attempting to use your CIRCLE_TOKEN results in permission denied error'
+    rm -rf curl_data
+    [[ "$output" == "$expected" ]]
+}
+
+
+## wrap jq to handle faking the version number
+jq() {
+  if [[ "$1" == "--version" ]] && [[ "x${jq_test_version:=}" != "x" ]]
+   then
+    echo "${jq_test_version}"
+  else
+    ## a bash portable which to locate the real jq. `which` on some platforms - like bsd - only uses csh configs.
+    $(builtin type -pa jq | head -n1 ) "$@"
+  fi
+}
+export -f jq
+
+
+## let e2e handle current and newer version
+@test "jq old version check" {
+    export jq_test_version="jq-1.3"
+    CIRCLE_PROJECT_USERNAME=foo CIRCLE_BUILD_NUM=6 CIRCLE_TOKEN=abc run ./do-exclusively
+    unset jq_test_version
+    expected=$'ERROR: requires jq version [ jq-1.5 ] or newer, you have [ jq-1.3 ]'
+    [[ "$output" == "$expected" ]]
+}
+
+
 @test "e2e" {
     mkdir curl_data
-    echo "$test_data" > curl_data/1
-    echo "[]" > curl_data/2
+    # permission denied check curl call
+    echo "[]" > curl_data/1
+    # first curl call
+    echo "$test_data" > curl_data/2
+    # second curl call
+    echo "[]" > curl_data/3
     git_data="Tagged with [bar]"
-    export curl_response_1 curl_response_2 git_data
+    export curl_response_1 curl_response_2 curl_response_3 git_data
     CIRCLE_PROJECT_USERNAME=foo CIRCLE_PROJECT_REPONAME=bar CIRCLE_BUILD_NUM=6 \
                            CIRCLE_TOKEN=abc run ./do-exclusively --tag bar echo foo
     expected=$'Checking for running builds...\nWaiting on builds:\n1\n2\n3\n5\nRetrying in 5 seconds...\nsleep\nAcquired lock\nfoo'
+    echo -e "output:\n$output" > test.out
+    echo -e "expected:\n$expected" >> test.out
+    echo -e "test data:\n$test_data" >> test.out
+    rm -rf curl_data
     [[ "$output" == "$expected" ]]
 }
+
