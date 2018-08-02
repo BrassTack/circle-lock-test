@@ -62,9 +62,10 @@ set -o pipefail
 
     ## when circleci build is run via CLI, CIRCLE_BUILD_NUM is set but empty.
     ## check this first
-    if [[ "x${CIRCLE_BUILD_NUM}" == "x" ]]
+    ## treat unset as empty, in the event this is run outside of circle's context
+    if [[ "x${CIRCLE_BUILD_NUM:=}" == "x" ]]
      then
-      echo "Skipping $(basename $0), this appears to be a CLI build, CIRCLE_BUILD_NUM is empty"
+      echo "Skipping $(basename $0), this appears to be a CLI build, CIRCLE_BUILD_NUM is empty or unset"
       if [[ "${#rest[@]}" -ne 0 ]]; then
           "${rest[@]}"
       fi

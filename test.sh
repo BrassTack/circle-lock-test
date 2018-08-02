@@ -120,9 +120,19 @@ teardown() {
 }
 
 
+## we need to rework this so it actually tests a job RUN too
 @test "circleci cli" {
   CIRCLE_BUILD_NUM="" run ./do-exclusively
-    expected=$'Skipping do-exclusively, this appears to be a CLI build, CIRCLE_BUILD_NUM is empty'
+    expected=$'Skipping do-exclusively, this appears to be a CLI build, CIRCLE_BUILD_NUM is empty or unset'
+    # echo -e "output:\n$output" > test.out
+    # echo -e "expected:\n$expected" >> test.out
+    # echo -e "test data:\n$test_data" >> test.out
+    [[ "$output" == "$expected" ]]
+}
+
+@test "not in circle context" {
+  run ./do-exclusively
+    expected=$'Skipping do-exclusively, this appears to be a CLI build, CIRCLE_BUILD_NUM is empty or unset'
     # echo -e "output:\n$output" > test.out
     # echo -e "expected:\n$expected" >> test.out
     # echo -e "test data:\n$test_data" >> test.out
